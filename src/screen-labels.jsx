@@ -17,13 +17,14 @@ function ScreenLabels() {
     setChargeLocal(labelTarget.chargeNr);
   }, [labelTarget.product, labelTarget.chargeNr]);
 
-  // Generate real scannable QR code whenever chargeNr changes
-  // qrcodejs writes into a temp div — we pull the canvas data URL out of it
+  // Generate real scannable QR code whenever chargeNr or mhd changes
+  // QR encodes "IF-2026-0627-A1|12/2026" — scan tab strips the MHD suffix when parsing
   React.useEffect(() => {
     if (typeof QRCode === "undefined") return;
+    const qrText = mhd ? `${chargeNr}|${mhd}` : chargeNr;
     const div = document.createElement("div");
     new QRCode(div, {
-      text: chargeNr,
+      text: qrText,
       width: 220,
       height: 220,
       colorDark: "#0B1220",
@@ -32,7 +33,7 @@ function ScreenLabels() {
     });
     const canvas = div.querySelector("canvas");
     if (canvas) setQrDataUrl(canvas.toDataURL("image/png"));
-  }, [chargeNr]);
+  }, [chargeNr, mhd]);
 
   function persist() {
     setLabelTarget({ product, chargeNr });

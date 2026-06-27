@@ -1,5 +1,5 @@
 function ScreenTable() {
-  const { rows, flashRowId, ORDERS, PRODUCTS, inventory, charges, fehlmengenList, exportToExcel } = useStore();
+  const { rows, flashRowId, ORDERS, PRODUCTS, inventory, charges, fehlmengenList, scanLog, exportToExcel } = useStore();
   const [search, setSearch]       = React.useState("");
   const [selectedRow, setSelectedRow] = React.useState(null);
   const [activeSheet, setActiveSheet] = React.useState("auftraege");
@@ -157,6 +157,9 @@ function ScreenTable() {
           {activeSheet === "fehlmengen" && (
             <SheetFehlmengen fehlmengenList={fehlmengenList} />
           )}
+          {activeSheet === "scanlog" && (
+            <SheetScanLog scanLog={scanLog} />
+          )}
         </div>
 
         {/* Sheet tabs */}
@@ -166,6 +169,9 @@ function ScreenTable() {
           <button className={activeSheet === "chargen"    ? "on" : ""} onClick={() => setActiveSheet("chargen")}>Chargen</button>
           <button className={activeSheet === "fehlmengen" ? "on" : ""} onClick={() => setActiveSheet("fehlmengen")}>
             Fehlmengen {fehlmengenList.length > 0 && <span style={{ marginLeft: 4, background: "var(--red)", color: "#fff", borderRadius: 999, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{fehlmengenList.length}</span>}
+          </button>
+          <button className={activeSheet === "scanlog" ? "on" : ""} onClick={() => setActiveSheet("scanlog")}>
+            Scan-Log {scanLog.length > 0 && <span style={{ marginLeft: 4, background: "var(--blue)", color: "#fff", borderRadius: 999, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{scanLog.length}</span>}
           </button>
           <button className="add"><Icon.Plus size={12} /></button>
         </div>
@@ -191,6 +197,9 @@ function ScreenTable() {
           </>}
           {activeSheet === "fehlmengen" && <>
             <span><b>{fehlmengenList.length}</b> Fehlmengen</span>
+          </>}
+          {activeSheet === "scanlog" && <>
+            <span><b>{scanLog.length}</b> Scans in dieser Session</span>
           </>}
           <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
             {activeSheet === "auftraege" ? "Aufträge KW 21" : activeSheet} · Excel-Export bereit
@@ -431,6 +440,68 @@ function SheetFehlmengen({ fehlmengenList }) {
             </td>
           </tr>
         )}
+      </tbody>
+    </table>
+  );
+}
+
+function SheetScanLog({ scanLog }) {
+  return (
+    <table className="xls">
+      <thead className="col-letters">
+        <tr>
+          <th className="rownum"></th>
+          {"ABCDEFGHI".split("").map(l => <th key={l}>{l}</th>)}
+        </tr>
+      </thead>
+      <thead className="col-names">
+        <tr>
+          <th className="rownum">#</th>
+          <th style={{ width: 160 }}>Zeitstempel</th>
+          <th style={{ width: 70 }}>Uhrzeit</th>
+          <th style={{ width: 80 }}>Produkt</th>
+          <th style={{ width: 180 }}>Produkt-Name</th>
+          <th className="num" style={{ width: 80 }}>Menge</th>
+          <th style={{ width: 90 }}>Einheit</th>
+          <th style={{ width: 150 }}>Auftrag</th>
+          <th style={{ width: 180 }}>Charge-Nr.</th>
+          <th style={{ width: 90 }}>MHD</th>
+        </tr>
+      </thead>
+      <tbody>
+        {scanLog.map((s, idx) => {
+          const p = s.product;
+          return (
+            <tr key={s.id}>
+              <td className="rownum">{idx + 2}</td>
+              <td className="mono" style={{ color: "var(--muted)", fontSize: 11 }}>{s.ts}</td>
+              <td className="mono" style={{ fontWeight: 600 }}>{s.when}</td>
+              <td>
+                <span className="pcode" style={{ background: p?.color || "#ccc" }}>{p?.code}</span>
+              </td>
+              <td>{p?.name}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{s.qty}</td>
+              <td>{s.unit}</td>
+              <td className="mono" style={{ color: "var(--muted)" }}>{s.orderId || "—"}</td>
+              <td className="mono" style={{ fontWeight: 600, color: "var(--blue)" }}>{s.chargeNr || "—"}</td>
+              <td className="center mono" style={{ color: "var(--muted)" }}>{s.mhd || "—"}</td>
+            </tr>
+          );
+        })}
+        {scanLog.length === 0 && (
+          <tr>
+            <td className="rownum">2</td>
+            <td colSpan={9} style={{ color: "var(--muted)", textAlign: "center", padding: "32px 0", fontSize: 13 }}>
+              Noch keine Scans in dieser Session · QR-Code im Scan-Tab erfassen
+            </td>
+          </tr>
+        )}
+        {Array.from({ length: Math.max(0, 5 - scanLog.length) }).map((_, i) => (
+          <tr key={`e${i}`}>
+            <td className="rownum">{scanLog.length + 2 + i}</td>
+            {Array.from({ length: 9 }).map((_, j) => <td key={j}></td>)}
+          </tr>
+        ))}
       </tbody>
     </table>
   );

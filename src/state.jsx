@@ -225,6 +225,9 @@ function StoreProvider({ children }) {
     chargeNr: "IF-2026-0521-A1",
   });
 
+  // Scan-Log (jeder echte Scan wird hier eingetragen)
+  const [scanLog, setScanLog] = React.useState([]);
+
   // Flash + toast
   const [flashRowId, setFlashRowId]   = React.useState(null);
   const [toast, setToast]             = React.useState(null);
@@ -248,10 +251,11 @@ function StoreProvider({ children }) {
   }
 
   // ── Simulate Scan ──────────────────────────
-  function simulateScan({ product, mode = scanMode, order = activeOrder, qty = 1 }) {
+  function simulateScan({ product, mode = scanMode, order = activeOrder, qty = 1, chargeNr: scanChargeNr = "", mhd: scanMhd = "" }) {
     const unit   = mode === "palette" ? "Palette" : "Karton";
     const safeQty = Math.max(1, Number(qty) || 1);
     const when   = new Date().toTimeString().slice(0, 5);
+    const ts     = Date.now();
 
     setLastScan({ when, product, qty: safeQty, unit, order: order.id, ok: true, idle: false });
     setKpi(k => ({
@@ -261,6 +265,19 @@ function StoreProvider({ children }) {
     }));
     pushActivity({ who: "Ice Frocks User", action: `Produkt ${product.code} · ${safeQty} ${unit}${safeQty !== 1 ? "n" : ""} ausgebucht`, kind: "out", target: order.id, ts: "gerade" });
     pushFeed(`SCAN OK · ${product.code} · ${safeQty}× ${unit} · ${order.id}`);
+
+    // Push to scan log (visible in Tabellen-Ansicht → Scan-Log)
+    setScanLog(log => [{
+      id: ts,
+      ts: new Date().toLocaleString("de-DE"),
+      when,
+      product,
+      qty: safeQty,
+      unit,
+      orderId: order.id,
+      chargeNr: scanChargeNr,
+      mhd: scanMhd,
+    }, ...log].slice(0, 100));
 
     // Update table row
     const row = rows.find(r => r.order === order.id);
@@ -431,8 +448,16 @@ function StoreProvider({ children }) {
     const ws4 = XLSX.utils.aoa_to_sheet([s4Headers, ...s4Rows]);
     XLSX.utils.book_append_sheet(wb, ws4, "Chargen");
 
+    // Sheet 5: Scan-Log
+    const s5Headers = ["Zeitstempel","Uhrzeit","Produkt","Produkt-Name","Menge","Einheit","Auftrag","Charge-Nr.","MHD"];
+    const s5Rows = scanLog.map(s => [s.ts, s.when, s.product.code, s.product.name, s.qty, s.unit, s.orderId, s.chargeNr, s.mhd]);
+    if (s5Rows.length === 0) s5Rows.push(["Noch kein Scan in dieser Session", "", "", "", "", "", "", "", ""]);
+    const ws5 = XLSX.utils.aoa_to_sheet([s5Headers, ...s5Rows]);
+    ws5["!cols"] = s5Headers.map(() => ({ wch: 18 }));
+    XLSX.utils.book_append_sheet(wb, ws5, "Scan-Log");
+
     XLSX.writeFile(wb, "IceFrocks_Lagerdaten_KW21.xlsx");
-    showToast("Excel-Datei exportiert · 4 Sheets");
+    showToast("Excel-Datei exportiert · 5 Sheets");
   }
 
   // ── Reset State ────────────────────────────
@@ -443,7 +468,8 @@ function StoreProvider({ children }) {
     setActivity(initialActivity());
     setCharges(initialCharges());
     setKpi({ fehlmengen: 3, eingang: 124, ausgang: 87, onTime: 96.4 });
-    setLastScan({ when: "10:42", product: PRODUCTS[1], qty: 1, unit: "Karton", order: "LS-2026-0149", ok: true });
+    setLastScan({ when: null, product: PRODUCTS[0], qty: 1, unit: "Karton", order: "", ok: null, idle: true });
+    setScanLog([]);
     setActiveOrder(FULL_ORDERS_INITIAL[0]);
     setScanMode("palette");
     setFeed([{ ts: "00:00:00", text: "STATE RESET · Initialdaten wiederhergestellt", level: "warn" }]);
@@ -488,6 +514,7 @@ function StoreProvider({ children }) {
     flashRowId,
     fehlmengenList,
     searchQuery, setSearchQuery,
+    scanLog,
     simulateScan, undoLastScan, bookWareneingang, exportToExcel, resetState,
     toast, showToast,
   };

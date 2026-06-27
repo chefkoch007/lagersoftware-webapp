@@ -25,27 +25,33 @@ function ScreenScan() {
     };
   }, []);
 
-  function parseScanCode(code) {
-    const clean = code.trim().toUpperCase();
+  function parseQrPayload(raw) {
+    const parts = raw.trim().split("|");
+    const chargeNr = parts[0].trim();
+    const mhd = parts[1]?.trim() || "";
+    const clean = chargeNr.toUpperCase();
     const directMatch = PRODUCTS.find(p => clean === p.code);
-    if (directMatch) return directMatch;
+    if (directMatch) return { product: directMatch, chargeNr, mhd };
     const chargeMatch = clean.match(/-([A-F])\d?$/);
-    if (chargeMatch) return PRODUCTS.find(p => p.code === chargeMatch[1]) || null;
-    for (const p of PRODUCTS) {
-      if (clean.includes(p.code)) return p;
+    if (chargeMatch) {
+      const product = PRODUCTS.find(p => p.code === chargeMatch[1]) || null;
+      return { product, chargeNr, mhd };
     }
-    return null;
+    for (const p of PRODUCTS) {
+      if (clean.includes(p.code)) return { product: p, chargeNr, mhd };
+    }
+    return { product: null, chargeNr, mhd };
   }
 
-  function triggerScan(code) {
-    const product = parseScanCode(code);
+  function triggerScan(raw) {
+    const { product, chargeNr, mhd } = parseQrPayload(raw);
     if (!product) {
-      showToast(`Unbekannter Code: ${code}`, "warn");
+      showToast(`Unbekannter Code: ${raw}`, "warn");
       return;
     }
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 800);
-    simulateScan({ product, mode: "karton", order: activeOrder, qty });
+    simulateScan({ product, mode: "karton", order: activeOrder, qty, chargeNr, mhd });
   }
 
   function startCamera() {
@@ -63,14 +69,15 @@ function ScreenScan() {
         (decodedText) => {
           triggerScan(decodedText);
           // Post to CF KV so desktop gets notified
-          const product = parseScanCode(decodedText);
+          const { product, chargeNr: parsedCharge, mhd: parsedMhd } = parseQrPayload(decodedText);
           if (product) {
             fetch("/api/scan", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 productCode: product.code,
-                chargeNr: decodedText,
+                chargeNr: parsedCharge,
+                mhd: parsedMhd,
                 mode: "karton",
                 qty,
                 orderId: activeOrder.id,
