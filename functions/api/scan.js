@@ -26,6 +26,18 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers });
   }
 
+  // If the KV namespace isn't bound, fail clearly instead of throwing a 1101.
+  // GET still returns a valid empty array so the client poller keeps working.
+  if (!env || !env.SCAN_KV) {
+    if (request.method === 'GET') {
+      return new Response('[]', { headers });
+    }
+    return new Response(
+      JSON.stringify({ ok: false, error: 'KV binding "SCAN_KV" fehlt — im Cloudflare Pages Dashboard unter Settings → Functions → KV namespace bindings (Production) anlegen und neu deployen.' }),
+      { status: 503, headers }
+    );
+  }
+
   if (request.method === 'POST') {
     try {
       const body = await request.json();
