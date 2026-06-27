@@ -210,7 +210,7 @@ function StoreProvider({ children }) {
 
   // Scan state — idle: true = nothing scanned yet
   const [lastScan, setLastScan]       = React.useState({
-    when: null, product: PRODUCTS[0], qty: 1, unit: "Karton", order: "", ok: null, idle: true,
+    when: null, product: PRODUCTS[0], qty: 1, unit: "Karton", order: "", chargeNr: "", mhd: "", ok: null, idle: true,
   });
   const [activeOrder, setActiveOrder] = React.useState(FULL_ORDERS_INITIAL[0]);
   const [scanMode, setScanMode]       = React.useState("palette");
@@ -257,7 +257,7 @@ function StoreProvider({ children }) {
     const when   = new Date().toTimeString().slice(0, 5);
     const ts     = Date.now();
 
-    setLastScan({ when, product, qty: safeQty, unit, order: order.id, ok: true, idle: false });
+    setLastScan({ when, product, qty: safeQty, unit, order: order.id, chargeNr: scanChargeNr, mhd: scanMhd, ok: true, idle: false });
     setKpi(k => ({
       ...k,
       ausgang: k.ausgang + safeQty,

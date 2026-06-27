@@ -1,10 +1,12 @@
 export async function onRequest(context) {
   const { request, env } = context;
 
+  // no-store everywhere so the desktop never polls a cached scan record
   const cors = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
   };
 
   if (request.method === 'OPTIONS') {
@@ -14,7 +16,9 @@ export async function onRequest(context) {
   if (request.method === 'POST') {
     try {
       const body = await request.json();
-      const record = JSON.stringify({ ...body, ts: body.ts ?? Date.now() });
+      // Stamp ts on the server so every record shares ONE clock (the edge),
+      // independent of the scanning device's possibly-skewed local clock.
+      const record = JSON.stringify({ ...body, ts: Date.now() });
       await env.SCAN_KV.put('latest', record, { expirationTtl: 3600 });
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...cors, 'Content-Type': 'application/json' },

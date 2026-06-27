@@ -297,14 +297,19 @@ function ScreenScan() {
                 </div>
               </div>
 
+              <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Charge-Nr. (aus QR-Code)</div>
+                <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4, fontFamily: "var(--font-mono)", letterSpacing: "0.03em" }}>{lastScan.chargeNr || "—"}</div>
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
                 <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px" }}>
                   <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Menge</div>
                   <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{lastScan.qty} {lastScan.unit}</div>
                 </div>
                 <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Auftrag</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, fontFamily: "var(--font-mono)" }}>{lastScan.order}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>MHD</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4, fontFamily: "var(--font-mono)" }}>{lastScan.mhd || "—"}</div>
                 </div>
               </div>
 
