@@ -14,19 +14,18 @@ function AppShell() {
   const storeRef = React.useRef(store);
   React.useEffect(() => { storeRef.current = store; }, [store]);
 
-  // Cross-device sync: poll /api/scan every 2 seconds.
-  // When the iPad/phone scans a QR and posts to CF KV, the desktop picks it up here.
-  //
-  // IMPORTANT: we must NOT compare the scan's timestamp against our own local clock
-  // (Date.now()). The scan ts is set on a *different* device whose clock may be ahead
-  // or behind ours by seconds or minutes — comparing across clocks silently drops scans.
-  // Instead we track the server ts of the record we last handled and only react when a
-  // *different* ts shows up. On the first successful poll we just adopt whatever is
-  // currently stored as the baseline, so we don't replay an old scan on page load.
+  // Cross-device sync: poll the shared scan log every 2 seconds.
+  // The server (CF KV) holds the single source of truth — the full list. We:
+  //   1. mirror it into local state so the table is identical on every device
+  //      and survives reloads (we fetch immediately on mount),
+  //   2. fire the live "notification + inventory" effect once for each NEW scan
+  //      that came from a *different* device.
+  // Dedup is by the record's unique id (set on the scanning device), so no clock
+  // comparison is involved — a skewed phone clock can't drop a scan anymore.
   React.useEffect(() => {
     let active = true;
-    let lastSeenTs = null;  // server ts of the record we have already processed
-    let primed = false;     // have we established the baseline yet?
+    const seen = new Set();  // ids we've already applied effects for
+    let primed = false;      // first poll just adopts the existing log, no replay
 
     async function poll() {
       if (!active) return;
@@ -34,25 +33,21 @@ function AppShell() {
         const myDeviceId = sessionStorage.getItem("wh_did") || "";
         const res = await fetch("/api/scan", { cache: "no-store" });
         if (res.ok) {
-          const data = await res.json();
-          if (data && data.ts) {
-            if (!primed) {
-              // First poll — adopt current record as baseline, do not replay it
-              lastSeenTs = data.ts;
-              primed = true;
-            } else if (data.ts !== lastSeenTs) {
-              lastSeenTs = data.ts;
-              // Ignore our own scans (we already booked them locally)
-              if (data.deviceId !== myDeviceId) {
-                const { PRODUCTS, simulateScan } = storeRef.current;
-                const product = PRODUCTS.find(p => p.code === data.productCode);
-                if (product) {
-                  simulateScan({ product, mode: data.mode || "karton", qty: data.qty || 1, chargeNr: data.chargeNr || "", mhd: data.mhd || "" });
-                }
+          const list = await res.json();
+          if (Array.isArray(list)) {
+            const { setScanLog, applyScanEffects } = storeRef.current;
+            // 1) mirror the shared log into the table (consistent + persistent)
+            setScanLog(list);
+
+            // 2) replay effects for genuinely new entries from other devices
+            for (const rec of list) {
+              if (seen.has(rec.id)) continue;
+              seen.add(rec.id);
+              if (primed && rec.deviceId !== myDeviceId) {
+                applyScanEffects(rec);
               }
             }
-          } else {
-            primed = true; // KV empty — baseline established, nothing to replay
+            primed = true;
           }
         }
       } catch {
@@ -61,7 +56,7 @@ function AppShell() {
       if (active) setTimeout(poll, 2000);
     }
 
-    poll(); // start immediately so the baseline is set without a 2s gap
+    poll(); // fetch the existing log immediately on load
     return () => { active = false; };
   }, []);
 

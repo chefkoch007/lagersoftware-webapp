@@ -1,5 +1,5 @@
 function ScreenTable() {
-  const { rows, flashRowId, ORDERS, PRODUCTS, inventory, charges, fehlmengenList, scanLog, exportToExcel } = useStore();
+  const { rows, flashRowId, ORDERS, PRODUCTS, inventory, charges, fehlmengenList, scanLog, clearScanLog, exportToExcel } = useStore();
   const [search, setSearch]       = React.useState("");
   const [selectedRow, setSelectedRow] = React.useState(null);
   const [activeSheet, setActiveSheet] = React.useState("auftraege");
@@ -84,6 +84,11 @@ function ScreenTable() {
           <h1>Bestellungen &amp; Bestandsbewegungen · KW 21</h1>
         </div>
         <div className="head-actions">
+          {activeSheet === "scanlog" && (
+            <button className="btn danger" onClick={clearScanLog} disabled={scanLog.length === 0}>
+              <Icon.Close size={15} /> Scan-Log leeren
+            </button>
+          )}
           <button className="btn" onClick={() => setFilterStatus(filterStatus === "offen" ? "all" : "offen")}>
             <Icon.Filter size={15} /> {filterStatus === "offen" ? "Filter aktiv: Offen" : "Filter"}
           </button>
@@ -199,7 +204,7 @@ function ScreenTable() {
             <span><b>{fehlmengenList.length}</b> Fehlmengen</span>
           </>}
           {activeSheet === "scanlog" && <>
-            <span><b>{scanLog.length}</b> Scans in dieser Session</span>
+            <span><b>{scanLog.length}</b> Scans · geräteübergreifend &amp; dauerhaft gespeichert</span>
           </>}
           <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
             {activeSheet === "auftraege" ? "Aufträge KW 21" : activeSheet} · Excel-Export bereit
@@ -470,16 +475,22 @@ function SheetScanLog({ scanLog }) {
       </thead>
       <tbody>
         {scanLog.map((s, idx) => {
-          const p = s.product;
+          const p = PRODUCTS.find(pr => pr.code === s.productCode);
+          const color = p?.color || s.color || "#ccc";
+          const name  = p?.name || s.productName || "";
+          const d = new Date(s.ts);
+          const valid   = !isNaN(d.getTime());
+          const tsLabel = valid ? d.toLocaleString("de-DE") : "";
+          const when    = valid ? d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "";
           return (
             <tr key={s.id}>
               <td className="rownum">{idx + 2}</td>
-              <td className="mono" style={{ color: "var(--muted)", fontSize: 11 }}>{s.ts}</td>
-              <td className="mono" style={{ fontWeight: 600 }}>{s.when}</td>
+              <td className="mono" style={{ color: "var(--muted)", fontSize: 11 }}>{tsLabel}</td>
+              <td className="mono" style={{ fontWeight: 600 }}>{when}</td>
               <td>
-                <span className="pcode" style={{ background: p?.color || "#ccc" }}>{p?.code}</span>
+                <span className="pcode" style={{ background: color }}>{s.productCode}</span>
               </td>
-              <td>{p?.name}</td>
+              <td>{name}</td>
               <td className="num" style={{ fontWeight: 700 }}>{s.qty}</td>
               <td>{s.unit}</td>
               <td className="mono" style={{ color: "var(--muted)" }}>{s.orderId || "—"}</td>
@@ -492,7 +503,7 @@ function SheetScanLog({ scanLog }) {
           <tr>
             <td className="rownum">2</td>
             <td colSpan={9} style={{ color: "var(--muted)", textAlign: "center", padding: "32px 0", fontSize: 13 }}>
-              Noch keine Scans in dieser Session · QR-Code im Scan-Tab erfassen
+              Noch keine Scans · QR-Code im Scan-Tab erfassen (geräteübergreifend &amp; dauerhaft)
             </td>
           </tr>
         )}

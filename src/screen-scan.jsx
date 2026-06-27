@@ -1,11 +1,5 @@
-function getDeviceId() {
-  let id = sessionStorage.getItem("wh_did");
-  if (!id) {
-    id = Math.random().toString(36).slice(2, 10);
-    sessionStorage.setItem("wh_did", id);
-  }
-  return id;
-}
+// getDeviceId lives in state.jsx (shared global) — simulateScan stamps each
+// scan with it before posting to the shared log.
 
 function ScreenScan() {
   const { lastScan, activeOrder, PRODUCTS, feed, simulateScan, undoLastScan, showToast } = useStore();
@@ -67,25 +61,9 @@ function ScreenScan() {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 240, height: 240 } },
         (decodedText) => {
+          // triggerScan → simulateScan applies local effects AND posts the scan
+          // to the shared server log, so every device (and reloads) see it.
           triggerScan(decodedText);
-          // Post to CF KV so desktop gets notified
-          const { product, chargeNr: parsedCharge, mhd: parsedMhd } = parseQrPayload(decodedText);
-          if (product) {
-            fetch("/api/scan", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                productCode: product.code,
-                chargeNr: parsedCharge,
-                mhd: parsedMhd,
-                mode: "karton",
-                qty,
-                orderId: activeOrder.id,
-                deviceId: getDeviceId(),
-                ts: Date.now(),
-              }),
-            }).catch(() => {});
-          }
           scanner.stop()
             .then(() => { scannerRef.current = null; setCameraActive(false); })
             .catch(() => {});

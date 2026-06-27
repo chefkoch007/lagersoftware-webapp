@@ -154,6 +154,13 @@ function buildChargeNr({ artikel, year, month, day, schicht }) {
   return `IF-${yy}-${mm}${dd}-${(artikel || "X")}${sh}`;
 }
 
+// Stable per-tab device id — distinguishes the scanning device from the others
+function getDeviceId() {
+  let id = sessionStorage.getItem("wh_did");
+  if (!id) { id = Math.random().toString(36).slice(2, 10); sessionStorage.setItem("wh_did", id); }
+  return id;
+}
+
 // ─────────────────────────────────────────────
 //  INITIAL ROWS (keep for table backward compat)
 // ─────────────────────────────────────────────
@@ -242,7 +249,9 @@ function StoreProvider({ children }) {
   }
 
   function pushActivity(entry) {
-    setActivity(a => [{ id: Date.now(), ...entry }, ...a].slice(0, 20));
+    // unique id even when two scans land in the same millisecond
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setActivity(a => [{ ...entry, id }, ...a].slice(0, 20));
   }
 
   function pushFeed(text, level = "ok") {
@@ -250,44 +259,37 @@ function StoreProvider({ children }) {
     setFeed(f => [{ ts, text, level }, ...f].slice(0, 40));
   }
 
-  // ── Simulate Scan ──────────────────────────
-  function simulateScan({ product, mode = scanMode, order = activeOrder, qty = 1, chargeNr: scanChargeNr = "", mhd: scanMhd = "" }) {
-    const unit   = mode === "palette" ? "Palette" : "Karton";
-    const safeQty = Math.max(1, Number(qty) || 1);
-    const when   = new Date().toTimeString().slice(0, 5);
-    const ts     = Date.now();
+  // ── Apply ephemeral scan effects ───────────
+  // Everything a scan does *locally* on this device: KPIs, inventory, table-row
+  // flash, feed, activity, the "Erfolgreich erfasst" card. Does NOT touch the
+  // shared scan log — that lives on the server (see postScan / the poller).
+  // Called both for local scans and for remote scans picked up by the poller.
+  function applyScanEffects(rec) {
+    const product = PRODUCTS.find(p => p.code === rec.productCode)
+      || { code: rec.productCode, name: rec.productName || rec.productCode, color: rec.color || "#7F94C8" };
+    const safeQty = Math.max(1, Number(rec.qty) || 1);
+    const unit    = rec.unit || "Karton";
+    const when    = new Date(rec.ts || Date.now()).toTimeString().slice(0, 5);
 
-    setLastScan({ when, product, qty: safeQty, unit, order: order.id, chargeNr: scanChargeNr, mhd: scanMhd, ok: true, idle: false });
+    setLastScan({ when, product, qty: safeQty, unit, order: rec.orderId, chargeNr: rec.chargeNr || "", mhd: rec.mhd || "", ok: true, idle: false });
     setKpi(k => ({
       ...k,
       ausgang: k.ausgang + safeQty,
       fehlmengen: Math.max(0, k.fehlmengen - (Math.random() > 0.65 ? 1 : 0)),
     }));
-    pushActivity({ who: "Ice Frocks User", action: `Produkt ${product.code} · ${safeQty} ${unit}${safeQty !== 1 ? "n" : ""} ausgebucht`, kind: "out", target: order.id, ts: "gerade" });
-    pushFeed(`SCAN OK · ${product.code} · ${safeQty}× ${unit} · ${order.id}`);
+    pushActivity({ who: "Ice Frocks User", action: `Produkt ${product.code} · ${safeQty} ${unit}${safeQty !== 1 ? "n" : ""} ausgebucht`, kind: "out", target: rec.orderId, ts: "gerade" });
+    pushFeed(`SCAN OK · ${product.code} · ${safeQty}× ${unit} · ${rec.orderId}`);
 
-    // Push to scan log (visible in Tabellen-Ansicht → Scan-Log)
-    setScanLog(log => [{
-      id: ts,
-      ts: new Date().toLocaleString("de-DE"),
-      when,
-      product,
-      qty: safeQty,
-      unit,
-      orderId: order.id,
-      chargeNr: scanChargeNr,
-      mhd: scanMhd,
-    }, ...log].slice(0, 100));
-
-    // Update table row
-    const row = rows.find(r => r.order === order.id);
-    if (row) {
-      setRows(rs => rs.map(r => r.id === row.id
+    // Update table row (flash)
+    setRows(rs => {
+      const row = rs.find(r => r.order === rec.orderId);
+      if (!row) return rs;
+      return rs.map(r => r.id === row.id
         ? { ...r, [product.code]: { anf: r[product.code].anf, end: Math.max(0, r[product.code].end - safeQty) } }
-        : r));
-      setFlashRowId(order.id);
-      setTimeout(() => setFlashRowId(null), 1200);
-    }
+        : r);
+    });
+    setFlashRowId(rec.orderId);
+    setTimeout(() => setFlashRowId(null), 1200);
 
     // Update inventory (today = Fr, index 4)
     setInventory(inv => {
@@ -303,10 +305,58 @@ function StoreProvider({ children }) {
     const now = new Date();
     setLabelTarget({
       product,
-      chargeNr: buildChargeNr({ artikel: product.code, year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), schicht: 1 }),
+      chargeNr: rec.chargeNr || buildChargeNr({ artikel: product.code, year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), schicht: 1 }),
     });
 
     showToast(`Produkt ${product.code} · ${safeQty}× ${unit} erfasst`);
+  }
+
+  // ── Persist a scan to the shared server log ─
+  async function postScan(rec) {
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rec),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.list)) setScanLog(data.list); // reconcile with server truth
+      }
+    } catch {
+      // Offline / local dev — optimistic local entry stays; will reconcile when online
+    }
+  }
+
+  // ── Simulate Scan (local) ──────────────────
+  // Builds the canonical record, applies local effects, optimistically adds it to
+  // the table, and pushes it to the shared server log so every device sees it.
+  function simulateScan({ product, mode = scanMode, order = activeOrder, qty = 1, chargeNr = "", mhd = "" }) {
+    const unit    = mode === "palette" ? "Palette" : "Karton";
+    const safeQty = Math.max(1, Number(qty) || 1);
+    const rec = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      ts: Date.now(),
+      productCode: product.code,
+      productName: product.name,
+      color: product.color,
+      qty: safeQty,
+      unit,
+      orderId: order.id,
+      chargeNr,
+      mhd,
+      deviceId: getDeviceId(),
+    };
+    applyScanEffects(rec);
+    setScanLog(log => (log.some(e => e.id === rec.id) ? log : [rec, ...log].slice(0, 500)));
+    postScan(rec);
+  }
+
+  // ── Clear the shared scan log (manual) ─────
+  async function clearScanLog() {
+    setScanLog([]);
+    try { await fetch("/api/scan", { method: "DELETE" }); } catch {}
+    showToast("Scan-Log geleert · auf allen Geräten");
   }
 
   // ── Undo Last Scan ─────────────────────────
@@ -448,10 +498,16 @@ function StoreProvider({ children }) {
     const ws4 = XLSX.utils.aoa_to_sheet([s4Headers, ...s4Rows]);
     XLSX.utils.book_append_sheet(wb, ws4, "Chargen");
 
-    // Sheet 5: Scan-Log
+    // Sheet 5: Scan-Log (shared, persistent)
     const s5Headers = ["Zeitstempel","Uhrzeit","Produkt","Produkt-Name","Menge","Einheit","Auftrag","Charge-Nr.","MHD"];
-    const s5Rows = scanLog.map(s => [s.ts, s.when, s.product.code, s.product.name, s.qty, s.unit, s.orderId, s.chargeNr, s.mhd]);
-    if (s5Rows.length === 0) s5Rows.push(["Noch kein Scan in dieser Session", "", "", "", "", "", "", "", ""]);
+    const s5Rows = scanLog.map(s => {
+      const d = new Date(s.ts);
+      const tsLabel = isNaN(d.getTime()) ? "" : d.toLocaleString("de-DE");
+      const when    = isNaN(d.getTime()) ? "" : d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+      const name    = s.productName || (PRODUCTS.find(p => p.code === s.productCode) || {}).name || "";
+      return [tsLabel, when, s.productCode, name, s.qty, s.unit, s.orderId, s.chargeNr, s.mhd];
+    });
+    if (s5Rows.length === 0) s5Rows.push(["Noch kein Scan vorhanden", "", "", "", "", "", "", "", ""]);
     const ws5 = XLSX.utils.aoa_to_sheet([s5Headers, ...s5Rows]);
     ws5["!cols"] = s5Headers.map(() => ({ wch: 18 }));
     XLSX.utils.book_append_sheet(wb, ws5, "Scan-Log");
@@ -468,8 +524,9 @@ function StoreProvider({ children }) {
     setActivity(initialActivity());
     setCharges(initialCharges());
     setKpi({ fehlmengen: 3, eingang: 124, ausgang: 87, onTime: 96.4 });
-    setLastScan({ when: null, product: PRODUCTS[0], qty: 1, unit: "Karton", order: "", ok: null, idle: true });
+    setLastScan({ when: null, product: PRODUCTS[0], qty: 1, unit: "Karton", order: "", chargeNr: "", mhd: "", ok: null, idle: true });
     setScanLog([]);
+    fetch("/api/scan", { method: "DELETE" }).catch(() => {}); // clear shared log too
     setActiveOrder(FULL_ORDERS_INITIAL[0]);
     setScanMode("palette");
     setFeed([{ ts: "00:00:00", text: "STATE RESET · Initialdaten wiederhergestellt", level: "warn" }]);
@@ -514,8 +571,8 @@ function StoreProvider({ children }) {
     flashRowId,
     fehlmengenList,
     searchQuery, setSearchQuery,
-    scanLog,
-    simulateScan, undoLastScan, bookWareneingang, exportToExcel, resetState,
+    scanLog, setScanLog, clearScanLog,
+    simulateScan, applyScanEffects, undoLastScan, bookWareneingang, exportToExcel, resetState,
     toast, showToast,
   };
 
