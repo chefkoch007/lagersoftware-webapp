@@ -100,7 +100,8 @@ function ScreenScan() {
     setCameraActive(false);
   }
 
-  const scanned = lastScan.ok;
+  const isIdle    = lastScan.idle;
+  const scanned   = lastScan.ok === true;
 
   return (
     <>
@@ -245,54 +246,66 @@ function ScreenScan() {
         {/* RIGHT — Ergebnis + Feed */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Letzter Scan */}
-          <div
-            className="card card-pad"
-            style={{
-              background: scanned
-                ? (scanFlash ? "linear-gradient(135deg,#D0F5E0,#fff)" : "linear-gradient(135deg,#F4FBF7,#fff)")
-                : "linear-gradient(135deg,#FFF7F7,#fff)",
-              borderColor: scanned ? "#CCEAD7" : "#F2C9C9",
-              transition: "background 0.4s",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <span className={`pill ${scanned ? "green" : "red"}`} style={{ height: 26, fontSize: 12, padding: "0 12px" }}>
-                {scanned ? <><Icon.Check size={13} /> &nbsp;Erfolgreich erfasst</> : <><Icon.Close size={13} /> &nbsp;Zurückgenommen</>}
-              </span>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>{lastScan.when} Uhr</span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-              <span style={{
-                width: 56, height: 56, borderRadius: 14, flexShrink: 0,
-                background: lastScan.product.color, color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 28, fontWeight: 700,
-              }}>
-                {lastScan.product.code}
-              </span>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Produkt {lastScan.product.code}</div>
-                <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 2 }}>{lastScan.product.name}</div>
+          {/* Letzter Scan — Idle / Ergebnis */}
+          {isIdle ? (
+            <div className="card card-pad" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 220, textAlign: "center" }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon.Scanner size={26} />
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-2)" }}>Bereit zum Scannen</div>
+              <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+                Menge einstellen, dann<br />QR-Code mit der Kamera erfassen.
               </div>
             </div>
+          ) : (
+            <div
+              className="card card-pad"
+              style={{
+                background: scanned
+                  ? (scanFlash ? "linear-gradient(135deg,#D0F5E0,#fff)" : "linear-gradient(135deg,#F4FBF7,#fff)")
+                  : "linear-gradient(135deg,#FFF7F7,#fff)",
+                borderColor: scanned ? "#CCEAD7" : "#F2C9C9",
+                transition: "background 0.4s",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <span className={`pill ${scanned ? "green" : "red"}`} style={{ height: 26, fontSize: 12, padding: "0 12px" }}>
+                  {scanned ? <><Icon.Check size={13} /> &nbsp;Erfolgreich erfasst</> : <><Icon.Close size={13} /> &nbsp;Zurückgenommen</>}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>{lastScan.when} Uhr</span>
+              </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-              <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Menge</div>
-                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{lastScan.qty} {lastScan.unit}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+                <span style={{
+                  width: 56, height: 56, borderRadius: 14, flexShrink: 0,
+                  background: lastScan.product.color, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 28, fontWeight: 700,
+                }}>
+                  {lastScan.product.code}
+                </span>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Produkt {lastScan.product.code}</div>
+                  <div style={{ fontSize: 14, color: "var(--muted)", marginTop: 2 }}>{lastScan.product.name}</div>
+                </div>
               </div>
-              <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Auftrag</div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, fontFamily: "var(--font-mono)" }}>{lastScan.order}</div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+                <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Menge</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{lastScan.qty} {lastScan.unit}</div>
+                </div>
+                <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", fontWeight: 600 }}>Auftrag</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, fontFamily: "var(--font-mono)" }}>{lastScan.order}</div>
+                </div>
               </div>
+
+              <button className="btn danger" style={{ width: "100%", justifyContent: "center" }} onClick={undoLastScan} disabled={!scanned}>
+                <Icon.Undo size={15} /> Rückgängig
+              </button>
             </div>
-
-            <button className="btn danger" style={{ width: "100%", justifyContent: "center" }} onClick={undoLastScan} disabled={!scanned}>
-              <Icon.Undo size={15} /> Rückgängig
-            </button>
-          </div>
+          )}
 
           {/* Live Feed */}
           <div className="card" style={{ flex: 1, overflow: "hidden" }}>

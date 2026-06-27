@@ -126,7 +126,13 @@ function ScreenLabels() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="field">
               <label>Produkt</label>
-              <select value={product.code} onChange={e => setProductLocal(PRODUCTS.find(p => p.code === e.target.value))}>
+              <select value={product.code} onChange={e => {
+                const p = PRODUCTS.find(p => p.code === e.target.value);
+                setProductLocal(p);
+                // Auto-update Chargennummer für neues Produkt → QR aktualisiert sich
+                const now = new Date();
+                setChargeLocal(buildChargeNr({ artikel: p.code, year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), schicht: 1 }));
+              }}>
                 {PRODUCTS.map(p => <option key={p.code} value={p.code}>{p.code} · {p.name}</option>)}
               </select>
             </div>

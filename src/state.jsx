@@ -208,9 +208,9 @@ function StoreProvider({ children }) {
   // KPI (derived + manual increment from actions)
   const [kpi, setKpi] = React.useState({ fehlmengen: 3, eingang: 124, ausgang: 87, onTime: 96.4 });
 
-  // Scan state
+  // Scan state — idle: true = nothing scanned yet
   const [lastScan, setLastScan]       = React.useState({
-    when: "10:42", product: PRODUCTS[1], qty: 1, unit: "Karton", order: "LS-2026-0149", ok: true,
+    when: null, product: PRODUCTS[0], qty: 1, unit: "Karton", order: "", ok: null, idle: true,
   });
   const [activeOrder, setActiveOrder] = React.useState(FULL_ORDERS_INITIAL[0]);
   const [scanMode, setScanMode]       = React.useState("palette");
@@ -253,7 +253,7 @@ function StoreProvider({ children }) {
     const safeQty = Math.max(1, Number(qty) || 1);
     const when   = new Date().toTimeString().slice(0, 5);
 
-    setLastScan({ when, product, qty: safeQty, unit, order: order.id, ok: true });
+    setLastScan({ when, product, qty: safeQty, unit, order: order.id, ok: true, idle: false });
     setKpi(k => ({
       ...k,
       ausgang: k.ausgang + safeQty,
@@ -295,7 +295,7 @@ function StoreProvider({ children }) {
   // ── Undo Last Scan ─────────────────────────
   function undoLastScan() {
     if (!lastScan || !lastScan.ok) { showToast("Nichts rückgängig zu machen", "warn"); return; }
-    setLastScan(ls => ({ ...ls, ok: false }));
+    setLastScan(ls => ({ ...ls, ok: false, idle: false }));
     setKpi(k => ({ ...k, ausgang: Math.max(0, k.ausgang - 1) }));
     pushActivity({
       who: "Ice Frocks User",
