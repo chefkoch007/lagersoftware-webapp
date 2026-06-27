@@ -248,25 +248,25 @@ function StoreProvider({ children }) {
   }
 
   // ── Simulate Scan ──────────────────────────
-  function simulateScan({ product, mode = scanMode, order = activeOrder }) {
-    const unit = mode === "palette" ? "Palette" : "Karton";
-    const qty  = 1;
-    const when = new Date().toTimeString().slice(0, 5);
+  function simulateScan({ product, mode = scanMode, order = activeOrder, qty = 1 }) {
+    const unit   = mode === "palette" ? "Palette" : "Karton";
+    const safeQty = Math.max(1, Number(qty) || 1);
+    const when   = new Date().toTimeString().slice(0, 5);
 
-    setLastScan({ when, product, qty, unit, order: order.id, ok: true });
+    setLastScan({ when, product, qty: safeQty, unit, order: order.id, ok: true });
     setKpi(k => ({
       ...k,
-      ausgang: k.ausgang + qty,
+      ausgang: k.ausgang + safeQty,
       fehlmengen: Math.max(0, k.fehlmengen - (Math.random() > 0.65 ? 1 : 0)),
     }));
-    pushActivity({ who: "Ice Frocks User", action: `Produkt ${product.code} · 1 ${unit} ausgebucht`, kind: "out", target: order.id, ts: "gerade" });
-    pushFeed(`SCAN OK · ${product.code} · ${unit} · ${order.id}`);
+    pushActivity({ who: "Ice Frocks User", action: `Produkt ${product.code} · ${safeQty} ${unit}${safeQty !== 1 ? "n" : ""} ausgebucht`, kind: "out", target: order.id, ts: "gerade" });
+    pushFeed(`SCAN OK · ${product.code} · ${safeQty}× ${unit} · ${order.id}`);
 
     // Update table row
     const row = rows.find(r => r.order === order.id);
     if (row) {
       setRows(rs => rs.map(r => r.id === row.id
-        ? { ...r, [product.code]: { anf: r[product.code].anf, end: Math.max(0, r[product.code].end - 1) } }
+        ? { ...r, [product.code]: { anf: r[product.code].anf, end: Math.max(0, r[product.code].end - safeQty) } }
         : r));
       setFlashRowId(order.id);
       setTimeout(() => setFlashRowId(null), 1200);
@@ -277,7 +277,7 @@ function StoreProvider({ children }) {
       const days = inv.days.map((d, i) => {
         if (i !== 4) return d;
         const prev = d[product.code] || { anf: 0, abg: 0, zug: 0 };
-        return { ...d, [product.code]: { ...prev, abg: prev.abg + qty } };
+        return { ...d, [product.code]: { ...prev, abg: prev.abg + safeQty } };
       });
       return { ...inv, days };
     });
@@ -289,7 +289,7 @@ function StoreProvider({ children }) {
       chargeNr: buildChargeNr({ artikel: product.code, year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), schicht: 1 }),
     });
 
-    showToast(`Produkt ${product.code} erfasst (${unit})`);
+    showToast(`Produkt ${product.code} · ${safeQty}× ${unit} erfasst`);
   }
 
   // ── Undo Last Scan ─────────────────────────

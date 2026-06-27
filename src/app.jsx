@@ -33,7 +33,7 @@ function AppShell() {
             const { PRODUCTS, simulateScan } = storeRef.current;
             const product = PRODUCTS.find(p => p.code === data.productCode);
             if (product) {
-              simulateScan({ product, mode: data.mode || "karton" });
+              simulateScan({ product, mode: data.mode || "karton", qty: data.qty || 1 });
             }
           }
         }

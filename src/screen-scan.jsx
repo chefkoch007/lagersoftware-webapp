@@ -14,6 +14,7 @@ function ScreenScan() {
   const scanInputRef = React.useRef(null);
   const [scanBuffer, setScanBuffer]   = React.useState("");
   const [scanFlash, setScanFlash]     = React.useState(false);
+  const [qty, setQty]                   = React.useState(1);
   const [cameraActive, setCameraActive] = React.useState(false);
   const scannerRef = React.useRef(null);
 
@@ -67,7 +68,7 @@ function ScreenScan() {
     }
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 600);
-    simulateScan({ product, mode: scanMode, order: activeOrder });
+    simulateScan({ product, mode: scanMode, order: activeOrder, qty });
   }
 
   function handleManualScan(productCode) {
@@ -75,7 +76,7 @@ function ScreenScan() {
     if (!product) return;
     setScanFlash(true);
     setTimeout(() => setScanFlash(false), 600);
-    simulateScan({ product, mode: scanMode, order: activeOrder });
+    simulateScan({ product, mode: scanMode, order: activeOrder, qty });
     if (scanInputRef.current) scanInputRef.current.focus();
   }
 
@@ -98,7 +99,7 @@ function ScreenScan() {
           // Process locally (shows confirmation on this device)
           processScan(decodedText);
           // Post to CF KV so desktop gets notified
-          postScanToApi(decodedText);
+          postScanToApi(decodedText, qty);
           // Stop camera after successful scan
           scanner.stop()
             .then(() => { scannerRef.current = null; setCameraActive(false); })
@@ -121,7 +122,7 @@ function ScreenScan() {
     setCameraActive(false);
   }
 
-  function postScanToApi(code) {
+  function postScanToApi(code, scanQty) {
     const product = parseScanCode(code);
     if (!product) return;
     fetch("/api/scan", {
@@ -131,6 +132,7 @@ function ScreenScan() {
         productCode: product.code,
         chargeNr: code,
         mode: scanMode,
+        qty: scanQty,
         orderId: activeOrder.id,
         deviceId: getDeviceId(),
         ts: Date.now(),
@@ -172,8 +174,8 @@ function ScreenScan() {
       <div className="ipad">
         <div className="ipad-screen" style={{ padding: 28 }}>
 
-          {/* Mode toggle + Order picker */}
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 20, marginBottom: 24 }}>
+          {/* Mode toggle + Menge + Order picker */}
+          <div style={{ display: "grid", gridTemplateColumns: "auto auto 1fr", gap: 20, marginBottom: 24 }}>
             <div className="card card-pad" style={{ padding: "18px 20px" }}>
               <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 10, fontWeight: 600 }}>Scanner-Modus</div>
               <div className="seg" style={{ padding: 6 }}>
@@ -188,6 +190,30 @@ function ScreenScan() {
                   onClick={() => { setScanMode("karton"); if (!cameraActive) scanInputRef.current?.focus(); }}
                   style={{ height: 48, padding: "0 22px", fontSize: 14 }}>
                   <Icon.Box size={16} /> &nbsp;Einzel-Karton
+                </button>
+              </div>
+            </div>
+
+            <div className="card card-pad" style={{ padding: "18px 20px", minWidth: 130 }}>
+              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 10, fontWeight: 600 }}>Menge</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  onClick={() => setQty(q => Math.max(1, q - 1))}
+                  style={{ width: 40, height: 48, borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", fontSize: 20, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={qty}
+                  onChange={e => setQty(Math.max(1, Number(e.target.value) || 1))}
+                  style={{ width: 56, height: 48, textAlign: "center", border: "1px solid var(--line)", borderRadius: 10, fontSize: 20, fontWeight: 700, fontFamily: "var(--font-mono)", background: "var(--card)" }}
+                />
+                <button
+                  onClick={() => setQty(q => Math.min(999, q + 1))}
+                  style={{ width: 40, height: 48, borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", fontSize: 20, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                  +
                 </button>
               </div>
             </div>
