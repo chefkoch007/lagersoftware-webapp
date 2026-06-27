@@ -2,7 +2,7 @@ function ScreenTable() {
   const { rows, flashRowId, ORDERS, PRODUCTS, inventory, charges, fehlmengenList, scanLog, clearScanLog, exportToExcel } = useStore();
   const [search, setSearch]       = React.useState("");
   const [selectedRow, setSelectedRow] = React.useState(null);
-  const [activeSheet, setActiveSheet] = React.useState("auftraege");
+  const [activeSheet, setActiveSheet] = React.useState("scanlog");
   const [sortCol, setSortCol]     = React.useState(null);
   const [sortDir, setSortDir]     = React.useState("asc");
   const [filterStatus, setFilterStatus] = React.useState("all");
@@ -80,57 +80,16 @@ function ScreenTable() {
     <>
       <div className="screen-head">
         <div>
-          <span className="greet">Tabellen-Ansicht · Excel-Ersatz</span>
-          <h1>Bestellungen &amp; Bestandsbewegungen · KW 21</h1>
+          <span className="greet">Scan-Log · geräteübergreifend &amp; dauerhaft</span>
+          <h1>Erfasste Scans</h1>
         </div>
         <div className="head-actions">
-          {activeSheet === "scanlog" && (
-            <button className="btn danger" onClick={clearScanLog} disabled={scanLog.length === 0}>
-              <Icon.Close size={15} /> Scan-Log leeren
-            </button>
-          )}
-          <button className="btn" onClick={() => setFilterStatus(filterStatus === "offen" ? "all" : "offen")}>
-            <Icon.Filter size={15} /> {filterStatus === "offen" ? "Filter aktiv: Offen" : "Filter"}
-          </button>
-          <button className="btn" onClick={() => toggleSort("spedition")}>
-            <Icon.Sort size={15} /> Sortieren
+          <button className="btn danger" onClick={clearScanLog} disabled={scanLog.length === 0}>
+            <Icon.Close size={15} /> Scan-Log leeren
           </button>
           <button className="btn dark" onClick={exportToExcel}>
             <Icon.Excel size={15} /> Excel exportieren
           </button>
-        </div>
-      </div>
-
-      {/* Search + pills */}
-      <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: "0 0 360px" }}>
-          <Icon.Search className="search-icon" size={15} />
-          <input
-            placeholder="Auftrag, Firma, Spedition oder Zielort suchen..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ width: "100%", height: 38, padding: "0 14px 0 36px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--card)", outline: "none" }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--muted-2)" }}>
-              <Icon.Close size={14} />
-            </button>
-          )}
-        </div>
-        <span className="pill">KW 21 · 18.–24. Mai</span>
-        <span className="pill blue">{filteredOrders.length} Aufträge</span>
-        <span className="pill green">Auto-Save · aktuell</span>
-        {filterStatus !== "all" && (
-          <button className="chip on" onClick={() => setFilterStatus("all")}>
-            <Icon.Close size={12} /> Status: {statusMap[filterStatus]?.label}
-          </button>
-        )}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {["all","geliefert","in-tour","kommissioniert","offen"].map(s => (
-            <button key={s} className={`chip ${filterStatus === s ? "on" : ""}`} onClick={() => setFilterStatus(s)}>
-              {s === "all" ? "Alle" : statusMap[s]?.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -139,75 +98,32 @@ function ScreenTable() {
         {/* Formula bar */}
         <div className="xls-formulabar" style={{ height: 34 }}>
           <div className="xls-namebox">
-            <span>{namebox}</span>
+            <span>A1</span>
             <Icon.ChevronD size={11} />
           </div>
           <div className="xls-fx">ƒx</div>
           <div className="xls-content">
-            <span className="eq">=</span>{formula}
+            <span className="eq">=</span>Live-Scan-Protokoll · jeder QR-Scan landet automatisch hier
           </div>
         </div>
 
         {/* Grid */}
         <div className="xls-scroll">
-          {activeSheet === "auftraege" && (
-            <SheetAuftraege rows={filteredOrders} selectedRow={selectedRow} setSelectedRow={setSelectedRow} flashRowId={flashRowId} statusMap={statusMap} SortBtn={SortBtn} />
-          )}
-          {activeSheet === "bestand" && (
-            <SheetBestand rows={bestandRows} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
-          )}
-          {activeSheet === "chargen" && (
-            <SheetChargen charges={charges} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
-          )}
-          {activeSheet === "fehlmengen" && (
-            <SheetFehlmengen fehlmengenList={fehlmengenList} />
-          )}
-          {activeSheet === "scanlog" && (
-            <SheetScanLog scanLog={scanLog} />
-          )}
+          <SheetScanLog scanLog={scanLog} />
         </div>
 
         {/* Sheet tabs */}
         <div className="xls-tabs">
-          <button className={activeSheet === "auftraege"  ? "on" : ""} onClick={() => setActiveSheet("auftraege")}>Aufträge KW 21</button>
-          <button className={activeSheet === "bestand"    ? "on" : ""} onClick={() => setActiveSheet("bestand")}>Bestand KW 21</button>
-          <button className={activeSheet === "chargen"    ? "on" : ""} onClick={() => setActiveSheet("chargen")}>Chargen</button>
-          <button className={activeSheet === "fehlmengen" ? "on" : ""} onClick={() => setActiveSheet("fehlmengen")}>
-            Fehlmengen {fehlmengenList.length > 0 && <span style={{ marginLeft: 4, background: "var(--red)", color: "#fff", borderRadius: 999, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{fehlmengenList.length}</span>}
-          </button>
-          <button className={activeSheet === "scanlog" ? "on" : ""} onClick={() => setActiveSheet("scanlog")}>
+          <button className="on">
             Scan-Log {scanLog.length > 0 && <span style={{ marginLeft: 4, background: "var(--blue)", color: "#fff", borderRadius: 999, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{scanLog.length}</span>}
           </button>
-          <button className="add"><Icon.Plus size={12} /></button>
         </div>
 
         {/* Status bar */}
         <div className="xls-status">
-          {activeSheet === "auftraege" && <>
-            <span><b>{filteredOrders.length}</b> Aufträge</span>
-            <span className="sep" />
-            <span>Summe Paletten: <b>{filteredOrders.reduce((s, o) => s + (o.summePaletten || 0), 0)}</b></span>
-            <span className="sep" />
-            <span>Netto-Gewicht: <b>{filteredOrders.reduce((s, o) => s + (o.gewichtNetto || 0), 0).toLocaleString("de-DE")} kg</b></span>
-            <span className="sep" />
-            <span>Markiert: <b>{selectedRow ? "1 Zeile" : "—"}</b></span>
-          </>}
-          {activeSheet === "bestand" && <>
-            <span><b>{bestandRows.length}</b> Einträge</span>
-            <span className="sep" />
-            <span>Fehlmengen: <b style={{ color: fehlmengenList.length > 0 ? "var(--red)" : "inherit" }}>{fehlmengenList.length}</b></span>
-          </>}
-          {activeSheet === "chargen" && <>
-            <span><b>{charges.length}</b> Chargen</span>
-          </>}
-          {activeSheet === "fehlmengen" && <>
-            <span><b>{fehlmengenList.length}</b> Fehlmengen</span>
-          </>}
-          {activeSheet === "scanlog" && <>
-            <span><b>{scanLog.length}</b> Scans · geräteübergreifend &amp; dauerhaft gespeichert</span>
-          </>}
+          <span><b>{scanLog.length}</b> Scans · geräteübergreifend &amp; dauerhaft gespeichert</span>
           <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
-            {activeSheet === "auftraege" ? "Aufträge KW 21" : activeSheet} · Excel-Export bereit
+            Scan-Log · Excel-Export bereit
           </span>
         </div>
       </div>

@@ -202,7 +202,7 @@ const initialCharges = () => [
 const StoreCtx = React.createContext(null);
 
 function StoreProvider({ children }) {
-  const [tab, setTab]           = React.useState("dashboard");
+  const [tab, setTab]           = React.useState("labels");
   const [simOpen, setSimOpen]   = React.useState(true);
 
   // Core data
@@ -531,7 +531,7 @@ function StoreProvider({ children }) {
     setScanMode("palette");
     setFeed([{ ts: "00:00:00", text: "STATE RESET · Initialdaten wiederhergestellt", level: "warn" }]);
     setLabelTarget({ product: PRODUCTS[0], chargeNr: "IF-2026-0521-A1" });
-    setTab("dashboard");
+    setTab("labels");
     showToast("Demo-State zurückgesetzt · alle Daten auf Initialwerte");
   }
 
