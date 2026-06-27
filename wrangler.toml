@@ -1,0 +1,14 @@
+name = "lagersoftware-webapp"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "."
+
+# KV namespace für Scan-Relay (Cross-Device Sync)
+# Setup in Cloudflare Dashboard:
+#   1. Workers & Pages → KV → Namespace erstellen: "SCAN_KV"
+#   2. Pages Projekt → Settings → Functions → KV namespace bindings
+#      Variable name: SCAN_KV → Namespace: SCAN_KV
+#   3. id unten mit echter KV Namespace ID ersetzen (aus Dashboard)
+
+[[kv_namespaces]]
+binding = "SCAN_KV"
+id = "PLACEHOLDER_REPLACE_WITH_KV_NAMESPACE_ID"

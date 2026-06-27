@@ -1,29 +1,47 @@
+function getDeviceId() {
+  let id = sessionStorage.getItem("wh_did");
+  if (!id) {
+    id = Math.random().toString(36).slice(2, 10);
+    sessionStorage.setItem("wh_did", id);
+  }
+  return id;
+}
+
 function ScreenScan() {
   const { lastScan, activeOrder, setActiveOrder, scanMode, setScanMode, undoLastScan, ORDERS, PRODUCTS, feed, simulateScan, showToast } = useStore();
 
   // Hidden input ref – captures hardware scanner keystrokes
   const scanInputRef = React.useRef(null);
-  const [scanBuffer, setScanBuffer] = React.useState("");
-  const [scanFlash, setScanFlash]   = React.useState(false);
+  const [scanBuffer, setScanBuffer]   = React.useState("");
+  const [scanFlash, setScanFlash]     = React.useState(false);
+  const [cameraActive, setCameraActive] = React.useState(false);
+  const scannerRef = React.useRef(null);
 
   // Auto-focus the hidden input on mount and whenever tab becomes active
   React.useEffect(() => {
-    const focus = () => { if (scanInputRef.current) scanInputRef.current.focus(); };
+    const focus = () => { if (scanInputRef.current && !cameraActive) scanInputRef.current.focus(); };
     focus();
-    const timer = setInterval(focus, 3000); // re-focus every 3s if lost
+    const timer = setInterval(focus, 3000);
     return () => clearInterval(timer);
+  }, [cameraActive]);
+
+  // Cleanup camera on unmount
+  React.useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
+    };
   }, []);
 
   // Parse a scan code like "IF-2026-0521-A1" → product A
   function parseScanCode(code) {
     const clean = code.trim().toUpperCase();
-    // Direct product code match (single letter A-F)
     const directMatch = PRODUCTS.find(p => clean === p.code);
     if (directMatch) return directMatch;
-    // Charge number suffix: IF-2026-MMDD-<ARTIKEL><SCHICHT>
     const chargeMatch = clean.match(/-([A-F])\d?$/);
     if (chargeMatch) return PRODUCTS.find(p => p.code === chargeMatch[1]) || null;
-    // Check if it contains the product code anywhere
     for (const p of PRODUCTS) {
       if (clean.includes(p.code)) return p;
     }
@@ -61,6 +79,65 @@ function ScreenScan() {
     if (scanInputRef.current) scanInputRef.current.focus();
   }
 
+  // ── Camera scanning ────────────────────────────
+  function startCamera() {
+    if (!window.Html5Qrcode) {
+      showToast("Kamera-Bibliothek noch nicht geladen — kurz warten", "warn");
+      return;
+    }
+    setCameraActive(true);
+
+    setTimeout(() => {
+      const scanner = new Html5Qrcode("qr-camera-div");
+      scannerRef.current = scanner;
+
+      scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          // Process locally (shows confirmation on this device)
+          processScan(decodedText);
+          // Post to CF KV so desktop gets notified
+          postScanToApi(decodedText);
+          // Stop camera after successful scan
+          scanner.stop()
+            .then(() => { scannerRef.current = null; setCameraActive(false); })
+            .catch(() => {});
+        },
+        () => {} // QR not found yet — ignore
+      ).catch(() => {
+        showToast("Kamera-Zugriff verweigert — Berechtigung im Browser prüfen", "warn");
+        scannerRef.current = null;
+        setCameraActive(false);
+      });
+    }, 150);
+  }
+
+  function stopCamera() {
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(() => {});
+      scannerRef.current = null;
+    }
+    setCameraActive(false);
+  }
+
+  function postScanToApi(code) {
+    const product = parseScanCode(code);
+    if (!product) return;
+    fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productCode: product.code,
+        chargeNr: code,
+        mode: scanMode,
+        orderId: activeOrder.id,
+        deviceId: getDeviceId(),
+        ts: Date.now(),
+      }),
+    }).catch(() => {}); // Silently ignore if no CF Function running (local dev)
+  }
+
   return (
     <>
       {/* Hidden input that captures hardware scanner */}
@@ -81,9 +158,14 @@ function ScreenScan() {
         </div>
         <div className="head-actions">
           <span className="pill green"><span className="dot" />Scanner verbunden · BT-LX42</span>
-          <button className="btn" onClick={() => scanInputRef.current && scanInputRef.current.focus()}>
-            <Icon.Scanner size={15} /> Fokus setzen
-          </button>
+          {!cameraActive
+            ? <button className="btn primary" onClick={startCamera}>
+                <Icon.Scanner size={15} /> Kamera-Scan starten
+              </button>
+            : <button className="btn danger" onClick={stopCamera}>
+                <Icon.Close size={15} /> Kamera beenden
+              </button>
+          }
         </div>
       </div>
 
@@ -97,13 +179,13 @@ function ScreenScan() {
               <div className="seg" style={{ padding: 6 }}>
                 <button
                   className={scanMode === "palette" ? "on" : ""}
-                  onClick={() => { setScanMode("palette"); scanInputRef.current?.focus(); }}
+                  onClick={() => { setScanMode("palette"); if (!cameraActive) scanInputRef.current?.focus(); }}
                   style={{ height: 48, padding: "0 22px", fontSize: 14 }}>
                   <Icon.Pallet size={16} /> &nbsp;Palette scannen
                 </button>
                 <button
                   className={scanMode === "karton" ? "on" : ""}
-                  onClick={() => { setScanMode("karton"); scanInputRef.current?.focus(); }}
+                  onClick={() => { setScanMode("karton"); if (!cameraActive) scanInputRef.current?.focus(); }}
                   style={{ height: 48, padding: "0 22px", fontSize: 14 }}>
                   <Icon.Box size={16} /> &nbsp;Einzel-Karton
                 </button>
@@ -129,7 +211,7 @@ function ScreenScan() {
                   onChange={e => {
                     const o = ORDERS.find(o => o.id === e.target.value);
                     if (o) setActiveOrder(o);
-                    scanInputRef.current?.focus();
+                    if (!cameraActive) scanInputRef.current?.focus();
                   }}
                 >
                   {ORDERS.map(o => (
@@ -174,19 +256,61 @@ function ScreenScan() {
                 </div>
               </div>
 
-              {/* Scanner viewport */}
-              <div className="scan-viewport" style={{ cursor: "pointer" }} onClick={() => scanInputRef.current?.focus()}>
-                <div className="grid" />
-                <div className="scan-frame">
-                  <div className="c1" /><div className="c2" /><div className="c3" /><div className="c4" />
-                </div>
-                <div className="scan-line" />
-                <div style={{ position: "absolute", top: 20, left: 0, right: 0, textAlign: "center" }}>
-                  <span className="pill" style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)", fontSize: 11, height: 22 }}>
-                    Scanner bereit · Tippe zum Fokussieren
-                  </span>
-                </div>
-                <div className="scan-hint">{scanMode === "palette" ? "Palette an Scanner halten" : "Karton-Barcode scannen"}</div>
+              {/* Scanner viewport — animiert ODER Kamera */}
+              <div className="scan-viewport" style={{ position: "relative" }}>
+
+                {/* Kamera-Div — immer im DOM, sichtbar wenn cameraActive */}
+                <div
+                  id="qr-camera-div"
+                  style={{
+                    position: "absolute", inset: 0, zIndex: 10,
+                    display: cameraActive ? "block" : "none",
+                    overflow: "hidden", borderRadius: 18,
+                    background: "#000",
+                  }}
+                />
+
+                {/* Animierter Scan-Viewport wenn Kamera aus */}
+                {!cameraActive && (
+                  <>
+                    <div className="grid" />
+                    <div className="scan-frame">
+                      <div className="c1" /><div className="c2" /><div className="c3" /><div className="c4" />
+                    </div>
+                    <div className="scan-line" />
+                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+                      <button
+                        onClick={startCamera}
+                        style={{
+                          background: "var(--blue)", color: "#fff", border: "none", borderRadius: 14,
+                          padding: "14px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 10,
+                          boxShadow: "0 8px 24px -8px rgba(47,90,243,0.7)",
+                        }}
+                      >
+                        <Icon.Scanner size={18} /> Kamera starten
+                      </button>
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        oder Hardware-Scanner verwenden
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* Kamera aktiv — Schließen-Button */}
+                {cameraActive && (
+                  <button
+                    onClick={stopCamera}
+                    style={{
+                      position: "absolute", top: 10, right: 10, zIndex: 20,
+                      background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
+                      borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <Icon.Close size={12} /> Schließen
+                  </button>
+                )}
               </div>
             </div>
           </div>

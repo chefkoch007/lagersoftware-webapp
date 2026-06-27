@@ -1,22 +1,3 @@
-// Deterministic pseudo-QR based on a seed string
-function qrCells(seed) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
-  const cells = [], N = 21;
-  for (let i = 0; i < N * N; i++) { h = Math.imul(h ^ (h >>> 13), 1597334677); cells.push((h & 0xff) > 120); }
-  const setFinder = (r0, c0) => {
-    for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) {
-      const inOuter = r === 0 || r === 6 || c === 0 || c === 6;
-      const inInner = (r >= 2 && r <= 4 && c >= 2 && c <= 4);
-      cells[(r0 + r) * N + (c0 + c)] = inOuter || inInner;
-      if ((r === 1 || r === 5) && c >= 1 && c <= 5) cells[(r0 + r) * N + (c0 + c)] = false;
-      if ((c === 1 || c === 5) && r >= 1 && r <= 5) cells[(r0 + r) * N + (c0 + c)] = false;
-    }
-  };
-  setFinder(0, 0); setFinder(0, N - 7); setFinder(N - 7, 0);
-  return cells;
-}
-
 function ScreenLabels() {
   const { labelTarget, setLabelTarget, PRODUCTS, showToast } = useStore();
   const [product, setProductLocal]   = React.useState(labelTarget.product);
@@ -28,6 +9,7 @@ function ScreenLabels() {
   const [bw, setBw]                  = React.useState(true);
   const [mhd, setMhd]               = React.useState("12/2026");
   const [isPrinting, setIsPrinting]  = React.useState(false);
+  const [qrDataUrl, setQrDataUrl]    = React.useState(null);
 
   // Sync with global labelTarget when simulator changes it
   React.useEffect(() => {
@@ -35,7 +17,22 @@ function ScreenLabels() {
     setChargeLocal(labelTarget.chargeNr);
   }, [labelTarget.product, labelTarget.chargeNr]);
 
-  const cells = qrCells(`${product.code}-${chargeNr}`);
+  // Generate real scannable QR code whenever chargeNr changes
+  // qrcodejs writes into a temp div — we pull the canvas data URL out of it
+  React.useEffect(() => {
+    if (typeof QRCode === "undefined") return;
+    const div = document.createElement("div");
+    new QRCode(div, {
+      text: chargeNr,
+      width: 220,
+      height: 220,
+      colorDark: "#0B1220",
+      colorLight: "#FFFFFF",
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    const canvas = div.querySelector("canvas");
+    if (canvas) setQrDataUrl(canvas.toDataURL("image/png"));
+  }, [chargeNr]);
 
   function persist() {
     setLabelTarget({ product, chargeNr });
@@ -54,8 +51,10 @@ function ScreenLabels() {
     if (!zone) return;
 
     const labelWidth = size === "L" ? 420 : size === "M" ? 360 : 280;
+    const qrImg = showCode && qrDataUrl
+      ? `<img src="${qrDataUrl}" alt="QR" style="width:100%;border-radius:8px;border:1px solid #E6E9EF;display:block;margin-top:16px;" />`
+      : "";
 
-    // Build HTML for N copies
     let html = "";
     for (let i = 0; i < copies; i++) {
       html += `
@@ -75,7 +74,7 @@ function ScreenLabels() {
             Charge-Nr.
             <div style="font-weight:600; font-size:18px; color:#0B1220; letter-spacing:0.04em; margin-top:2px;">${chargeNr}</div>
           </div>
-          ${showCode ? `<div style="margin-top:16px; border:1px solid #E6E9EF; border-radius:8px; padding:8px; display:grid; grid-template-columns:repeat(21,1fr); gap:1px; background:#fff;">${cells.map(on => `<span style="background:${on ? "#0B1220" : "transparent"}; border-radius:1px; aspect-ratio:1; display:block;"></span>`).join("")}</div>` : ""}
+          ${qrImg}
           <div style="display:flex; justify-content:space-between; margin-top:12px; font-size:10px; color:#5A6477; text-transform:uppercase; letter-spacing:0.08em;">
             <span>SKU IF-${product.code}-2026</span>
             <span>Ice Frocks GmbH</span>
@@ -107,7 +106,7 @@ function ScreenLabels() {
         </div>
         <div className="head-actions">
           <button className="btn"><Icon.Layers size={15} /> Vorlagen</button>
-          <button className="btn primary" onClick={handlePrint} disabled={isPrinting}>
+          <button className="btn primary" onClick={handlePrint} disabled={isPrinting || !qrDataUrl}>
             <Icon.Print size={15} /> {isPrinting ? "Wird gedruckt…" : `Drucken · ${copies}×`}
           </button>
         </div>
@@ -133,9 +132,9 @@ function ScreenLabels() {
             </div>
 
             <div className="field">
-              <label>Chargennummer</label>
+              <label>Chargennummer (= QR-Code-Inhalt)</label>
               <input value={chargeNr} onChange={e => setChargeLocal(e.target.value)} style={{ fontFamily: "var(--font-mono)", fontWeight: 600, letterSpacing: "0.04em" }} />
-              <span className="hint">Format: IF-JJJJ-MMTT-&lt;Artikel&gt;&lt;Schicht&gt;</span>
+              <span className="hint">Format: IF-JJJJ-MMTT-&lt;Artikel&gt;&lt;Schicht&gt; · wird direkt in den QR kodiert</span>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -182,7 +181,7 @@ function ScreenLabels() {
               <button className="btn" onClick={persist}>
                 <Icon.Check size={15} /> Speichern
               </button>
-              <button className="btn primary" onClick={handlePrint} disabled={isPrinting} style={{ marginLeft: "auto" }}>
+              <button className="btn primary" onClick={handlePrint} disabled={isPrinting || !qrDataUrl} style={{ marginLeft: "auto" }}>
                 <Icon.Print size={15} /> {copies}× Drucken
               </button>
             </div>
@@ -199,8 +198,8 @@ function ScreenLabels() {
         }}>
           <div className="card-title" style={{ alignSelf: "stretch" }}>
             <div>
-              <h3>Vorschau · Hochauflösend</h3>
-              <span className="sub">Maßstabsgetreu · bereit zum Drucken</span>
+              <h3>Vorschau · Echter QR-Code</h3>
+              <span className="sub">Echtzeit generiert · mit iOS-Kamera scanbar</span>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <span className="pill">{size === "S" ? "70×40 mm" : size === "M" ? "100×70 mm" : "150×100 mm"}</span>
@@ -208,7 +207,7 @@ function ScreenLabels() {
             </div>
           </div>
 
-          {/* Label preview (screen only) */}
+          {/* Label preview */}
           <div className="label-paper" id="label-preview-inner" style={{ marginTop: 10, width: labelWidth }}>
             <div className="lp-head">
               <span>Ice Frocks · Charge</span>
@@ -228,8 +227,11 @@ function ScreenLabels() {
               <b>{chargeNr}</b>
             </div>
             {showCode && (
-              <div className="qr" style={{ marginTop: 16 }}>
-                {cells.map((on, i) => <span key={i} className={on ? "" : "off"} />)}
+              <div style={{ marginTop: 16 }}>
+                {qrDataUrl
+                  ? <img src={qrDataUrl} alt="QR-Code" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--line)", display: "block" }} />
+                  : <div style={{ width: "100%", aspectRatio: "1", background: "var(--bg-2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--muted)" }}>QR wird generiert…</div>
+                }
               </div>
             )}
             <div className="lp-foot">
@@ -238,7 +240,7 @@ function ScreenLabels() {
             </div>
           </div>
 
-          <button className="btn dark lg" style={{ marginTop: 20 }} onClick={handlePrint} disabled={isPrinting}>
+          <button className="btn dark lg" style={{ marginTop: 20 }} onClick={handlePrint} disabled={isPrinting || !qrDataUrl}>
             <Icon.Print size={16} /> {isPrinting ? "Wird gedruckt…" : `${copies}× Drucken`}
           </button>
 
