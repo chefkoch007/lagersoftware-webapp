@@ -2,5 +2,8 @@ name = "lagersoftware-webapp"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "."
 
-# KV binding "SCAN_KV" ist im Cloudflare Pages Dashboard konfiguriert:
-# Pages Projekt → Settings → Functions → Bindings → KV namespace → SCAN_KV
+# Shared scan log (functions/api/scan.js liest/schreibt env.SCAN_KV).
+# Als Code gebunden, damit das Binding bei jedem Deploy garantiert aktiv ist.
+[[kv_namespaces]]
+binding = "SCAN_KV"
+id = "054a38ef3ef44cf897dee53bee2c3d0f"
