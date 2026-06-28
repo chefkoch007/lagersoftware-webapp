@@ -271,7 +271,7 @@ function StoreProvider({ children }) {
     const unit    = rec.unit || "Karton";
     const when    = new Date(rec.ts || Date.now()).toTimeString().slice(0, 5);
 
-    setLastScan({ when, product, qty: safeQty, unit, order: rec.orderId, chargeNr: rec.chargeNr || "", mhd: rec.mhd || "", ok: true, idle: false });
+    setLastScan({ id: rec.id, when, product, qty: safeQty, unit, order: rec.orderId, chargeNr: rec.chargeNr || "", mhd: rec.mhd || "", ok: true, idle: false });
     setKpi(k => ({
       ...k,
       ausgang: k.ausgang + safeQty,
@@ -360,30 +360,49 @@ function StoreProvider({ children }) {
   }
 
   // ── Undo Last Scan ─────────────────────────
+  // Removes the last scan from the shared log (table) on every device and
+  // reverts its booking effects.
   function undoLastScan() {
     if (!lastScan || !lastScan.ok) { showToast("Nichts rückgängig zu machen", "warn"); return; }
+
+    const code   = lastScan.product?.code;
+    const qty     = Math.max(1, Number(lastScan.qty) || 1);
+    const undoId = lastScan.id;
+
     setLastScan(ls => ({ ...ls, ok: false, idle: false }));
-    setKpi(k => ({ ...k, ausgang: Math.max(0, k.ausgang - 1) }));
+    setKpi(k => ({ ...k, ausgang: Math.max(0, k.ausgang - qty) }));
     pushActivity({
       who: "Ice Frocks User",
-      action: `Rückgängig: ${lastScan.product?.code} · ${lastScan.unit} — Eintrag korrigiert`,
+      action: `Rückgängig: ${code} · ${qty} ${lastScan.unit} — aus Scan-Log entfernt`,
       kind: "warn", target: lastScan.order, ts: "gerade",
     });
-    pushFeed(`UNDO · ${lastScan.product?.code} · letzten Scan zurückgenommen`, "warn");
+    pushFeed(`UNDO · ${code} · ${qty}× ${lastScan.unit} aus Scan-Log entfernt`, "warn");
 
-    // Revert inventory
+    // Remove the entry from the shared scan log (optimistic + server)
+    if (undoId) {
+      setScanLog(log => log.filter(e => e.id !== undoId));
+      (async () => {
+        try {
+          const res = await fetch(`/api/scan?id=${encodeURIComponent(undoId)}`, { method: "DELETE" });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.list)) setScanLog(data.list);
+          }
+        } catch {}
+      })();
+    }
+
+    // Revert inventory (today = Fr, index 4) by the scanned quantity
     setInventory(inv => {
       const days = inv.days.map((d, i) => {
-        if (i !== 4) return d;
-        const code = lastScan.product?.code;
-        if (!code) return d;
+        if (i !== 4 || !code) return d;
         const prev = d[code] || { anf: 0, abg: 0, zug: 0 };
-        return { ...d, [code]: { ...prev, abg: Math.max(0, prev.abg - 1) } };
+        return { ...d, [code]: { ...prev, abg: Math.max(0, prev.abg - qty) } };
       });
       return { ...inv, days };
     });
 
-    showToast("Buchung rückgängig gemacht · in Historie protokolliert", "warn");
+    showToast(`Letzter Scan entfernt · ${code} · ${qty} ${lastScan.unit}`, "warn");
   }
 
   // ── Book Wareneingang (Production) ─────────

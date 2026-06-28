@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=1440, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Ice Frocks · Warehouse OS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -472,6 +472,41 @@
       border: 1px solid #ccc !important;
       page-break-inside: avoid;
     }
+  }
+
+  /* ── Responsive 2-column utility (stacks on phones) ── */
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* ── MOBILE (phones) ── */
+  @media (max-width: 768px) {
+    body { font-size: 15px; }
+    .app { height: auto; min-height: 100vh; overflow: visible; }
+    .app-body { flex-direction: column; overflow: visible; }
+    .app > .main, .app-body > .main { padding: 16px 14px 40px; overflow: visible; }
+
+    /* Header: logo + compact user, wrap, no fixed search width */
+    .header-inner { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+    .user-pill .meta { display: none; }
+    .user-pill { padding: 4px; }
+
+    /* Tabs: horizontal scroll, easy to tap */
+    .tabs { padding: 0 12px 12px; gap: 6px; }
+    .tab { height: 40px; font-size: 14px; }
+
+    /* Screen heading shrinks and stacks */
+    .screen-head { flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 16px; }
+    .screen-head h1 { font-size: 24px; }
+    .head-actions { flex-wrap: wrap; }
+
+    /* Any 2-column layout becomes single column */
+    .cols-2 { grid-template-columns: 1fr; gap: 14px; }
+    .grid-2, .grid-3, .grid-cards, .kpi-grid { grid-template-columns: 1fr; }
+
+    /* Buttons a touch larger for fingers */
+    .btn { height: 44px; }
+
+    /* Excel table stays scrollable horizontally */
+    .xls-scroll { max-height: 60vh; }
   }
 </style>
 </head>

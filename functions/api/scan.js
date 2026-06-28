@@ -64,6 +64,15 @@ export async function onRequest(context) {
   }
 
   if (request.method === 'DELETE') {
+    // ?id=<id> removes a single entry (undo); without it, clears the whole log.
+    const id = new URL(request.url).searchParams.get('id');
+    if (id) {
+      const raw = await env.SCAN_KV.get(KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      const next = list.filter(e => e.id !== id);
+      await env.SCAN_KV.put(KEY, JSON.stringify(next));
+      return new Response(JSON.stringify({ ok: true, list: next }), { headers });
+    }
     await env.SCAN_KV.delete(KEY).catch(() => {});
     return new Response(JSON.stringify({ ok: true }), { headers });
   }

@@ -113,7 +113,7 @@ function ScreenLabels() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div className="cols-2" style={{ gap: 20 }}>
         {/* Form panel */}
         <div className="card card-pad">
           <div className="card-title">

@@ -59,7 +59,12 @@ function ScreenScan() {
       scannerRef.current = scanner;
       scanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        {
+          fps: 10,
+          // Adaptive scan box — fits narrow phone viewports as well as desktop
+          qrbox: (vw, vh) => { const m = Math.round(Math.min(vw, vh) * 0.75); return { width: m, height: m }; },
+          aspectRatio: 1.0,
+        },
         (decodedText) => {
           // triggerScan → simulateScan applies local effects AND posts the scan
           // to the shared server log, so every device (and reloads) see it.
@@ -100,7 +105,7 @@ function ScreenScan() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, maxWidth: 900 }}>
+      <div className="cols-2" style={{ gap: 24, maxWidth: 900 }}>
 
         {/* LEFT — Menge + Kamera */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
